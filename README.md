@@ -23,7 +23,7 @@ The goal of this research is to move from reactive/scheduled maintenance to **pr
   - `trainer.py`: Training loops and evaluation logic.
 - `requirements.txt`: List of dependencies required to reproduce the environment.
 
-## 🚀 Getting Started
+## Getting Started
 
 1. **Clone the repository:**
    ```bash
