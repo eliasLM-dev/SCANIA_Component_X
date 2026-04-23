@@ -14,4 +14,4 @@ jobs:
         run: docker build -t scania-component-x .
 
       - name: Run Tests in Docker
-        run: docker run scania-component-x pytest functions/test_functions.py -v
+        run: docker run scania-component-x pytest tests/test_functions.py -v
