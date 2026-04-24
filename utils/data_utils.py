@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.metrics import average_precision_score, f1_score, precision_score, recall_score, roc_auc_score
 
 # -----------------------------------------------------------------------------------------
 # --------------------------------------- Cumulative Features -----------------------------
@@ -40,7 +41,7 @@ def prepare_lr_data(df, label_col):
 
 
 # -----------------------------------------------------------------------------------------
-# --------------------------------------- Sequential Data ------------------------------------
+# --------------------------------------- Sequential Data ---------------------------------
 # -----------------------------------------------------------------------------------------
 def generate_sequential_data(df, label_col, seq_len):
     """
@@ -75,3 +76,38 @@ def generate_sequential_data(df, label_col, seq_len):
     y = np.stack(labels)
 
     return X, y
+
+
+# -----------------------------------------------------------------------------------------
+# ---------------------------------- Cost Matrix ------------------------------------------
+# -----------------------------------------------------------------------------------------
+
+def compute_total_cost(y_true, y_pred, cost_matrix):
+    """
+    Computes total cost given true multiclass labels and binary predictions.
+    Args:
+        y_true: array of actual class labels (0-4)
+        y_pred: array of binary predictions (0 or 1)
+        cost_matrix: dict mapping (actual_class, predicted_class) to cost
+    Returns:
+        total_cost: sum of costs for all predictions
+    """
+    total = 0
+
+    for actual, predicted in zip(y_true, y_pred):
+        total += cost_matrix[(actual, predicted)]
+
+    return total
+
+def get_metrics(df, threshold=0.5):
+    y_true = df['class_label'].values
+    y_pred = (df['probability'].values >= threshold).astype(int)
+    # Convert multiclass to binary for standard metrics
+    y_true_binary = (y_true > 0).astype(int)
+    return {
+        'Recall':    recall_score(y_true_binary, y_pred),
+        'Precision': precision_score(y_true_binary, y_pred),
+        'F1':        f1_score(y_true_binary, y_pred),
+        'AUC-ROC':   roc_auc_score(y_true_binary, df['probability'].values),
+        'AUC-PR':    average_precision_score(y_true_binary, df['probability'].values),
+    }
