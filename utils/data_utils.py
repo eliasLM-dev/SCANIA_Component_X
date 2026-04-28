@@ -1,11 +1,14 @@
 import numpy as np
 from sklearn.metrics import average_precision_score, f1_score, precision_score, recall_score, roc_auc_score
+import torch
+from torch.utils.data import Dataset
 
 # -----------------------------------------------------------------------------------------
 # --------------------------------------- Cumulative Features -----------------------------
 # -----------------------------------------------------------------------------------------
 
 def get_cumulative_cols(df, cols, threshold=0.95):
+    df = df.sort_values(['vehicle_id', 'time_step'])
     cumulative = []
     for col in cols:
         if df[col].dtype != 'object':
@@ -14,6 +17,10 @@ def get_cumulative_cols(df, cols, threshold=0.95):
 
             if len(active_diffs) > 0 and (active_diffs > 0).mean() > threshold:
                 cumulative.append(col)
+
+    print(f"Analyzing cumulative features with threshold {threshold}...")            
+    print(f"Cumulative features: {cumulative}")
+    print(f"Non-cumulative features: {[col for col in cols if col not in cumulative]}")
                 
     return cumulative
 
@@ -43,11 +50,18 @@ def prepare_lr_data(df, label_col):
 # -----------------------------------------------------------------------------------------
 # --------------------------------------- Sequential Data ---------------------------------
 # -----------------------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------------------
+# --------------------------------------- Sequential Data ---------------------------------
+# -----------------------------------------------------------------------------------------
+
 def generate_sequential_data(df, label_col, seq_len):
     """
     Prepares padded/truncated 3D sequential input data for LSTM and TCN models.
     Sequences longer than seq_len are truncated from the left (keeping most recent).
     Sequences shorter than seq_len are zero-padded at the front.
+    A binary mask channel is appended as the last feature: 1 = real observation,
+    0 = padding.
 
     Args:
         df (pd.DataFrame): Raw sequential vehicle data.
@@ -55,27 +69,40 @@ def generate_sequential_data(df, label_col, seq_len):
         seq_len (int): Fixed sequence length.
 
     Returns:
-        tuple: (X, y) where X is shape (n_vehicles, seq_len, n_features) and y is shape (n_vehicles,).
+        tuple: (X, y, vehicle_ids)
+            X: shape (n_vehicles, seq_len, n_features + 1)
+            y: shape (n_vehicles,)
+            vehicle_ids: shape (n_vehicles,)
     """
     sequence_matrix = []
     labels = []
+    ids = []
 
     for vehicle_id, vehicle in df.groupby('vehicle_id'):
+        vehicle = vehicle.sort_values('time_step')
         sequence = vehicle.drop(columns=['vehicle_id', label_col, 'time_step']).values
         N = len(sequence)
 
+        mask = np.zeros((seq_len, 1))
+
         if N >= seq_len:
-            sequence_matrix.append(sequence[-seq_len:])
+            sequence = sequence[-seq_len:]
+            mask[:] = 1.0
         else:
             padding = np.zeros((seq_len - N, sequence.shape[1]))
-            sequence_matrix.append(np.vstack([padding, sequence]))
+            sequence = np.vstack([padding, sequence])
+            mask[seq_len - N:] = 1.0
 
+        sequence = np.hstack([sequence, mask])
+        sequence_matrix.append(sequence)
         labels.append(vehicle[label_col].iloc[-1])
+        ids.append(vehicle_id)
 
     X = np.stack(sequence_matrix)
     y = np.stack(labels)
+    vehicle_ids = np.array(ids)
 
-    return X, y
+    return X, y, vehicle_ids
 
 
 # -----------------------------------------------------------------------------------------
