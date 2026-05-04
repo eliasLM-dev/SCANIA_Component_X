@@ -6,11 +6,13 @@ import matplotlib.pyplot as plt
 import torch
 from pathlib import Path
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader, WeightedRandomSampler
 from sklearn.metrics import (
     recall_score, precision_score, f1_score,
     roc_auc_score, average_precision_score, confusion_matrix
 )
+
+from torch.utils.data import WeightedRandomSampler
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -21,7 +23,10 @@ class FocalLoss(nn.Module):
         self.gamma = gamma
 
     def forward(self, logits, targets):
-        bce = nn.functional.binary_cross_entropy_with_logits(logits, targets, reduction='none')
+        bce = nn.functional.binary_cross_entropy_with_logits(
+            logits, targets, 
+            reduction='none'
+        )
         p = torch.sigmoid(logits)
         p_t = p * targets + (1 - p) * (1 - targets)
         alpha_t = self.alpha * targets + (1 - self.alpha) * (1 - targets)
@@ -51,11 +56,17 @@ class EarlyStopper():
         self.save_path = save_path
 
     def early_stop(self, auc_pr, model):
-        """Returns True if training should stop, saves model if improved."""
+        """Returns True if training should stop, saves model if improved.
+        Args:
+            auc_pr (float): Current epoch's validation AUC-PR.
+            model (nn.Module): The model to save.
+        Returns:
+            bool: True if training should stop, False otherwise.
+        """
         if auc_pr > self.best_auc_pr + self.min_delta:
             self.best_auc_pr = auc_pr
             self.counter = 0
-            torch.save(model.state_dict(), self.save_path)
+            # torch.save(model.state_dict(), self.save_path)
             return False
 
         self.counter += 1
@@ -105,14 +116,12 @@ class BaseTrainer():
         Returns:
             dict: Training history with 'train_loss', 'val_loss', 'val_auc_pr' lists.
         """
-        n_neg = float((y_train == 0).sum())
-        n_pos = float((y_train == 1).sum())
-        pos_weight = torch.tensor([5.0], dtype=torch.float32, device=DEVICE)
         criterion = FocalLoss(alpha=0.85, gamma=2.0)
         train_loader = DataLoader(
             TensorDataset(torch.FloatTensor(X_train), torch.FloatTensor(y_train)),
             batch_size=self.batch_size, shuffle=True
         )
+
         val_loader = DataLoader(
             TensorDataset(torch.FloatTensor(X_val), torch.FloatTensor(y_val)),
             batch_size=self.batch_size, shuffle=False
@@ -180,7 +189,7 @@ class BaseTrainer():
         seconds = elapsed_time % 60
         print(f"Total elapsed time: {minutes} Minutes and {seconds:.2f} seconds")
         print("___________________________________")
-        self.model.load_state_dict(torch.load(save_path, map_location=DEVICE))
+        #self.model.load_state_dict(torch.load(save_path, map_location=DEVICE))
         return self.history
 
     def predict(self, X, threshold=0.5):
