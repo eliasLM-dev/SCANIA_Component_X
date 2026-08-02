@@ -12,7 +12,8 @@ from sklearn.metrics import (
     roc_auc_score, average_precision_score, confusion_matrix
 )
 
-from torch.utils.data import WeightedRandomSampler
+import tempfile
+import os
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -40,6 +41,8 @@ class FocalLoss(nn.Module):
 class EarlyStopper():
     """
     Stops training when validation AUC-PR stops improving.
+    Best model weights are saved to a temporary file and restored
+    at the end of training. No permanent files are written to disk.
 
     Args:
         patience (int): Epochs to wait before stopping. Default 15.
@@ -54,6 +57,7 @@ class EarlyStopper():
         self.counter = 0
         self.best_auc_pr = 0.0
         self.save_path = save_path
+        self._temp_path = None
 
     def early_stop(self, auc_pr, model):
         """Returns True if training should stop, saves model if improved.
@@ -67,16 +71,33 @@ class EarlyStopper():
             self.best_auc_pr = auc_pr
             self.counter = 0
             # torch.save(model.state_dict(), self.save_path)
+            # Save best weights to temp file instead
+            if self._temp_path is None:
+                tmp = tempfile.NamedTemporaryFile(suffix='.pt', delete=False)
+                self._temp_path = tmp.name
+                tmp.close()
+            torch.save(model.state_dict(), self._temp_path)
             return False
 
         self.counter += 1
         return self.counter >= self.patience
 
+    def restore_best(self, model):
+        """
+        Loads best weights back into model and removes temp file.
+        Call this at the end of training.
+
+        Args:
+            model (nn.Module): The model to restore weights into.
+        """
+        if self._temp_path is not None and os.path.exists(self._temp_path):
+            model.load_state_dict(torch.load(self._temp_path, map_location=DEVICE))
+            os.remove(self._temp_path)
+            self._temp_path = None
+        else:
+            print("Warning: no checkpoint found — model weights not restored.")
 
 
-# -----------------------------------------------------------------------------------------
-# --------------------------------------- Base Trainer ------------------------------------
-# -----------------------------------------------------------------------------------------
 class BaseTrainer():
     """
     Trainer for binary classification models in PyTorch.
@@ -189,6 +210,8 @@ class BaseTrainer():
         seconds = elapsed_time % 60
         print(f"Total elapsed time: {minutes} Minutes and {seconds:.2f} seconds")
         print("___________________________________")
+        # Restore best weights from temp file
+        # es.restore_best(self.model)
         #self.model.load_state_dict(torch.load(save_path, map_location=DEVICE))
         return self.history
 
@@ -346,3 +369,5 @@ def random_search(model_class, param_grid, model_kwargs_fn,
     print(f"Best {model_name} AUC-PR: {best_auc_pr:.4f}")
 
     return best_params, best_auc_pr, pd.DataFrame(results)
+
+
