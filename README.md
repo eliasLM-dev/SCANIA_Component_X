@@ -1,6 +1,6 @@
 # Predictive Maintenance for Heavy Trucks: A Cost Sensitive Approach to Component Failure Prediction
 
-This repository contains the full implementation for a bachelor's thesis on predicting component failures in heavy trucks using operational sensor data, evaluated under a real, industry defined cost structure rather than standard classification metrics alone.
+This repository contains the full implementation for a Masters's thesis on predicting component failures in heavy trucks using operational sensor data, evaluated under a real, industry defined cost structure rather than standard classification metrics alone.
 
 Full thesis available at Stockholm University's DiVA portal: [Read the full thesis here](https://su.diva-portal.org/smash/get/diva2:2080706/FULLTEXT01.pdf)
 
